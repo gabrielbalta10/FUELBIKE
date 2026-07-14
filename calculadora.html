@@ -288,7 +288,10 @@ $('#calc').onclick = () => {
 
   // --- Garrafas ---
   const nGar = Math.max(1, Math.ceil(liqTotal/gar));
-  const mlPorGar = Math.min(gar, Math.round(liqTotal/nGar));
+  const fullVol = Math.round(Math.min(gar, liqTotal));   // garrafa cheia até a capacidade escolhida
+  const lastVol = Math.round(liqTotal - gar*(nGar-1));    // a última garrafa leva o resto
+  const parcial = nGar>1 && lastVol < gar-1;              // a última não enche até a boca?
+  const mlPorGar = fullVol;                                // as exibições usam a garrafa cheia
 
   // --- Limite de concentração (máx 8% de carbo na garrafa) ---
   const carbMaxLiquido = liqTotal*0.08;
@@ -346,16 +349,18 @@ $('#calc').onclick = () => {
   // --- Tabela por garrafa ---
   $('#tbl').innerHTML = `<tr><th>Ingrediente</th><th>Por garrafa</th><th>Medida caseira</th><th>Total (${nGar}x)</th></tr>` +
     rec.map(r=>{
-      const pg = r.g/nGar;
+      const pg = r.g*fullVol/liqTotal;
       const u = r.nome==='Eletrólito líquido' ? 'ml' : r.nome==='Pastilha efervescente' ? 'un' : 'g';
-      const pgShow = r.nome==='Pastilha efervescente' ? r.un/nGar : pg;
+      const pgShow = r.nome==='Pastilha efervescente' ? r.un*fullVol/liqTotal : pg;
       const totShow = r.nome==='Pastilha efervescente' ? r.un : r.g;
       return `<tr><td>${r.nome}</td><td><b>${cs(pgShow,1)} ${u}</b></td><td>${r.med(pg,r)}</td><td>${cs(totShow,1)} ${u}</td></tr>`;
     }).join('') +
     `<tr><td>Água</td><td><b>${cs(mlPorGar)} ml</b></td><td>até completar</td><td>${cs(liqTotal)} ml</td></tr>`;
 
   $('#conc').textContent = `Concentração de ${(carbLiquido/liqTotal*100).toFixed(1)}% — abaixo de 8%, o esvaziamento gástrico continua rápido e o risco de enjoo é baixo.` +
-    (carbSolido>3 ? ` Os ${cs(carbSolido)} g restantes vão em comida sólida (banana ≈ 25 g, barra ≈ 30 g, gel ≈ 25 g), porque concentrar tudo na garrafa causaria desconforto.` : '');
+    (carbSolido>3 ? ` Os ${cs(carbSolido)} g restantes vão em comida sólida (banana ≈ 25 g, barra ≈ 30 g, gel ≈ 25 g), porque concentrar tudo na garrafa causaria desconforto.` : '') +
+    (parcial ? ` A coluna "por garrafa" é para uma garrafa cheia de ${cs(gar)} ml: encha ${nGar-1} assim e faça a última com ${cs(lastVol)} ml (mesma mistura, só um pouco menos de tudo).`
+             : (nGar>1 ? ` As ${nGar} garrafas vão cheias com ${cs(gar)} ml cada.` : ''));
 
   // --- Garrafa (assinatura) ---
   const totalG = rec.reduce((s,r)=>s+r.g,0) || 1;
