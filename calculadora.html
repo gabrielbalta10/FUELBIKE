@@ -116,9 +116,7 @@
   <div id="tempoBox" style="display:none"><label>Tempo de pedal (minutos)</label><input id="tempo" type="number" value="120" min="10"></div>
   <div><label>Peso (kg)</label><input id="peso" type="number" value="70" min="30"></div>
   <div><label>Temperatura (°C)</label><input id="temp" type="number" value="28"></div>
-  <div><label>Garrafa (ml)</label>
-    <select id="garrafa"><option>300</option><option>500</option><option selected>750</option><option>1000</option></select>
-  </div>
+  <div><label>Tamanho da garrafa (ml)</label><input id="garrafa" type="number" value="750" min="100" step="50" placeholder="ex: 750"></div>
   <div><label>Nível</label>
     <select id="nivel">
       <option value="1" selected>Iniciante (estômago não treinado)</option>
@@ -263,6 +261,7 @@ $('#calc').onclick = () => {
     h=dist/vel;
   }
   if(!ing.length){alert('Selecione ao menos um ingrediente.');return;}
+  if(!gar||gar<100){alert('Informe o tamanho da garrafa (mínimo 100 ml).');return;}
 
   // --- Carboidrato por hora ---
   let cph;
