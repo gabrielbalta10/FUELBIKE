@@ -48,6 +48,9 @@
   .chip{display:flex;align-items:center;gap:8px;padding:10px 14px;border:1px solid var(--line);border-radius:999px;background:var(--ink-2);cursor:pointer;font-size:14px;user-select:none}
   .chip input{width:auto;accent-color:var(--amber)}
   .chip.on{border-color:var(--amber);background:#1a3b2f22;box-shadow:inset 0 0 0 1px var(--amber)}
+  .chip img{height:20px;width:auto;border-radius:4px;vertical-align:middle}
+  .chip.brand{border-color:var(--amber);font-weight:700}
+  .chip.brand.on{background:#3a2a0e55}
   button.go{margin-top:22px;width:100%;padding:16px;border:0;border-radius:12px;background:var(--amber);color:#20160a;font:700 18px 'Barlow Condensed',sans-serif;letter-spacing:.12em;text-transform:uppercase;cursor:pointer}
   button.go:hover{filter:brightness(1.08)}
   .ghost{background:transparent;color:var(--paper);border:1px solid var(--line);border-radius:10px;padding:10px 16px;font:600 13px Archivo;cursor:pointer}
@@ -156,6 +159,7 @@
   <label class="chip"><input type="checkbox" value="liquido"> Eletrólito líquido (gotas)</label>
   <label class="chip"><input type="checkbox" value="sal"> Sal de cozinha</label>
   <label class="chip"><input type="checkbox" value="frutose"> Frutose / açúcar</label>
+  <label class="chip brand" title="Receita pronta: mel + limão + sal (~8% de carbo)"><input type="checkbox" value="kisuco"> <img src="marca.png" alt="" onerror="this.style.display='none'"> KI-SUCO DO BARBA</label>
 </div>
 
 <div class="grid" style="margin-top:14px">
@@ -266,6 +270,9 @@ $('#calc').onclick = () => {
   const gar1=+$('#gar1').value, gar2=+$('#gar2').value||0, mochila=+$('#mochila').value||0, inten=+$('#int').value, suor=+$('#suor').value, gut=+$('#gut').value;
   const supTipo=$('#supTipo').value, supItens=$('#supItens').value.trim(), gelCarb=+$('#gelCarb').value||25, gelNa=+$('#gelNa').value||0;
   const ing = [...document.querySelectorAll('.chip input:checked')].map(i=>i.value);
+  // KI-SUCO DO BARBA: receita pronta = mel (carbo) + sal (sódio) + limão
+  const kisuco = ing.includes('kisuco');
+  if(kisuco){ if(!ing.includes('mel')) ing.push('mel'); if(!ing.includes('sal')) ing.push('sal'); }
 
   // duração: por velocidade média OU por tempo de pedal (minutos)
   let vel, h;
@@ -430,30 +437,42 @@ $('#calc').onclick = () => {
   passos.push({t:'Pós', d:`${cs(peso*1.2)} g de carbo + ${cs(peso*0.3,1)} g de proteína e 1,5 L de líquido por kg perdido.`});
   $('#tl').innerHTML = passos.map(p=>`<div class="tick"><div class="t">${p.t}</div><div class="d">${p.d}</div></div>`).join('');
 
-  // --- Preparo (dinâmico: só mostra passos dos ingredientes selecionados) ---
-  const nomes = rec.map(r=>r.nome);
-  const tem = n => nomes.includes(n);
-  const artigo = {
-    'Maltodextrina':'a maltodextrina','Eletrólito em pó':'o eletrólito em pó',
-    'Frutose / açúcar':'a frutose (ou açúcar)','Sal refinado':'o sal',
-    'Mel':'o mel','Melado de cana':'o melado'
-  };
-  const listar = a => a.length<2 ? (a[0]||'') : a.slice(0,-1).join(', ')+' e '+a[a.length-1];
+  // --- Preparo (KI-SUCO DO BARBA tem preparo próprio; senão, dinâmico) ---
   const prep = [];
-  const pos = ['Maltodextrina','Eletrólito em pó','Frutose / açúcar','Sal refinado'].filter(tem).map(n=>artigo[n]);
-  if(pos.length) prep.push(`Dissolva ${listar(pos)} em ~150 ml de água morna, mexendo até ficar transparente${tem('Maltodextrina')?' — a maltodextrina empedra em água gelada, por isso comece com água morna':''}.`);
-  const doce = ['Mel','Melado de cana'].filter(tem).map(n=>artigo[n]);
-  if(doce.length) prep.push(`Acrescente ${listar(doce)}, mexendo até dissolver o fundo grudento.`);
-  if(tem('Eletrólito líquido')) prep.push('Pingue as gotas de eletrólito líquido na garrafa.');
-  if(tem('Pastilha efervescente'))
-    prep.push(`Complete com água gelada até ${cs(mlPorGar)} ml, adicione a pastilha efervescente por último e espere borbulhar por completo antes de fechar — não agite com força para não transbordar.`);
-  else
-    prep.push(`Complete com água gelada até ${cs(mlPorGar)} ml e agite 20 segundos com a tampa fechada.`);
-  prep.push(refills>0
-    ? `Você vai encher a bike ${loads}× (reabastece ${refills}× no caminho). Leve o pó/eletrólito pré-pesado em saquinhos e misture com água nos pontos de apoio.`
-    : (v2>0
-        ? `Prepare as duas garrafas com a mesma mistura${v1===v2?'':' (a Garrafa 2 na proporção do volume dela)'} e encaixe na bike.`
-        : 'Leve a garrafa cheia e, no calor, leve outra só com água para beber puro e molhar a nuca.'));
+  if(kisuco){
+    const limPorGar = Math.max(1, Math.round(v1/750));
+    prep.push(`<b>KI-SUCO DO BARBA</b> 🍋 — isotônico natural de limão, mel e sal (~8% de carbo).`);
+    prep.push(`Separe uma parte da água (~${cs(Math.round(v1/7))} ml) e amorne levemente — <b>não ferva</b>.`);
+    prep.push(`Dissolva o mel e o sal (quantidades na tabela acima) nessa água morna até dissolver bem.`);
+    prep.push(`Despeje na garrafa e acrescente o suco de ${limPorGar} limão(ões) médio(s) espremido(s).`);
+    prep.push(`Complete com água fria até ${cs(v1)} ml, agite bem e gele até a hora do pedal.`);
+    if(refills>0) prep.push(`Como você enche a bike ${loads}×, leve o mel/sal pré-medidos e limões para remixar nos pontos de apoio.`);
+    else if(v2>0) prep.push(`Repita para a Garrafa 2 (${cs(v2)} ml)${v1===v2?'':' na proporção do volume dela'}.`);
+    prep.push('O limão dá potássio e sabor; o mel entrega glicose + frutose (absorção dupla) e o sal repõe o sódio.');
+  } else {
+    const nomes = rec.map(r=>r.nome);
+    const tem = n => nomes.includes(n);
+    const artigo = {
+      'Maltodextrina':'a maltodextrina','Eletrólito em pó':'o eletrólito em pó',
+      'Frutose / açúcar':'a frutose (ou açúcar)','Sal refinado':'o sal',
+      'Mel':'o mel','Melado de cana':'o melado'
+    };
+    const listar = a => a.length<2 ? (a[0]||'') : a.slice(0,-1).join(', ')+' e '+a[a.length-1];
+    const pos = ['Maltodextrina','Eletrólito em pó','Frutose / açúcar','Sal refinado'].filter(tem).map(n=>artigo[n]);
+    if(pos.length) prep.push(`Dissolva ${listar(pos)} em ~150 ml de água morna, mexendo até ficar transparente${tem('Maltodextrina')?' — a maltodextrina empedra em água gelada, por isso comece com água morna':''}.`);
+    const doce = ['Mel','Melado de cana'].filter(tem).map(n=>artigo[n]);
+    if(doce.length) prep.push(`Acrescente ${listar(doce)}, mexendo até dissolver o fundo grudento.`);
+    if(tem('Eletrólito líquido')) prep.push('Pingue as gotas de eletrólito líquido na garrafa.');
+    if(tem('Pastilha efervescente'))
+      prep.push(`Complete com água gelada até ${cs(mlPorGar)} ml, adicione a pastilha efervescente por último e espere borbulhar por completo antes de fechar — não agite com força para não transbordar.`);
+    else
+      prep.push(`Complete com água gelada até ${cs(mlPorGar)} ml e agite 20 segundos com a tampa fechada.`);
+    prep.push(refills>0
+      ? `Você vai encher a bike ${loads}× (reabastece ${refills}× no caminho). Leve o pó/eletrólito pré-pesado em saquinhos e misture com água nos pontos de apoio.`
+      : (v2>0
+          ? `Prepare as duas garrafas com a mesma mistura${v1===v2?'':' (a Garrafa 2 na proporção do volume dela)'} e encaixe na bike.`
+          : 'Leve a garrafa cheia e, no calor, leve outra só com água para beber puro e molhar a nuca.'));
+  }
   prep.push('Prove em casa antes da prova. Bebida nova em dia de prova é receita de dor de barriga.');
   $('#prep').innerHTML = prep.map(t=>`<li>${t}</li>`).join('');
 
