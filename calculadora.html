@@ -116,7 +116,8 @@
   <div id="tempoBox" style="display:none"><label>Tempo de pedal (minutos)</label><input id="tempo" type="number" value="120" min="10"></div>
   <div><label>Peso (kg)</label><input id="peso" type="number" value="70" min="30"></div>
   <div><label>Temperatura (°C)</label><input id="temp" type="number" value="28"></div>
-  <div><label>Tamanho da garrafa (ml)</label><input id="garrafa" type="number" value="750" min="100" step="50" placeholder="ex: 750"></div>
+  <div><label>Garrafa 1 na bike (ml)</label><input id="gar1" type="number" value="750" min="100" step="50" placeholder="ex: 750"></div>
+  <div><label>Garrafa 2 na bike (ml) — 0 se levar só uma</label><input id="gar2" type="number" value="750" min="0" step="50" placeholder="ex: 750 ou 0"></div>
   <div><label>Nível</label>
     <select id="nivel">
       <option value="1" selected>Iniciante (estômago não treinado)</option>
@@ -246,7 +247,7 @@ const colherMel = g => (g/21).toFixed(1); // colher de sopa de mel ≈ 21 g
 
 $('#calc').onclick = () => {
   const dist=+$('#dist').value, peso=+$('#peso').value, temp=+$('#temp').value;
-  const gar=+$('#garrafa').value, inten=+$('#int').value, suor=+$('#suor').value, gut=+$('#gut').value;
+  const gar1=+$('#gar1').value, gar2=+$('#gar2').value||0, inten=+$('#int').value, suor=+$('#suor').value, gut=+$('#gut').value;
   const ing = [...document.querySelectorAll('.chip input:checked')].map(i=>i.value);
 
   // duração: por velocidade média OU por tempo de pedal (minutos)
@@ -261,7 +262,7 @@ $('#calc').onclick = () => {
     h=dist/vel;
   }
   if(!ing.length){alert('Selecione ao menos um ingrediente.');return;}
-  if(!gar||gar<100){alert('Informe o tamanho da garrafa (mínimo 100 ml).');return;}
+  if(!gar1||gar1<100){alert('Informe a Garrafa 1 (mínimo 100 ml).');return;}
 
   // --- Carboidrato por hora ---
   let cph;
@@ -285,12 +286,18 @@ $('#calc').onclick = () => {
   const met = vel<20?6: vel<25?8: vel<30?10:12;
   const kcal = met*peso*h;
 
-  // --- Garrafas ---
-  const nGar = Math.max(1, Math.ceil(liqTotal/gar));
-  const fullVol = Math.round(Math.min(gar, liqTotal));   // garrafa cheia até a capacidade escolhida
-  const lastVol = Math.round(liqTotal - gar*(nGar-1));    // a última garrafa leva o resto
-  const parcial = nGar>1 && lastVol < gar-1;              // a última não enche até a boca?
-  const mlPorGar = fullVol;                                // as exibições usam a garrafa cheia
+  // --- Garrafas: o que cabe na bike (máx. 2) e reabastecimento ---
+  const carryCap = gar1 + gar2;                            // capacidade total nas garrafas
+  const nBottles = gar2>0 ? 2 : 1;
+  const liqR = Math.round(liqTotal);
+  const cabe = liqR <= carryCap + 1;                       // dá pra levar tudo de uma vez?
+  const loads = Math.max(1, Math.ceil(liqR / carryCap));   // quantas vezes é preciso encher a bike
+  const refills = loads - 1;                               // reabastecimentos no caminho
+  let v1, v2;                                              // volume em cada garrafa
+  if(cabe){ v1 = Math.min(gar1, liqR); v2 = Math.max(0, liqR - v1); }
+  else    { v1 = gar1; v2 = gar2; }
+  const perMl = liqTotal>0 ? 1/liqTotal : 0;               // concentração uniforme (fração por ml)
+  const mlPorGar = v1;                                     // exibição principal = Garrafa 1
 
   // --- Limite de concentração (máx 8% de carbo na garrafa) ---
   const carbMaxLiquido = liqTotal*0.08;
@@ -323,7 +330,7 @@ $('#calc').onclick = () => {
     rec.push({nome:'Eletrólito em pó', g, med:g=>`${colher(g)} colheres de sopa`, na:naFalta});
   } else if(ing.includes('pastilha')){
     const un = naFalta/naPast;
-    rec.push({nome:'Pastilha efervescente', g:un*4, un, med:(g,r)=>`${(r.un/nGar).toFixed(1)} pastilha(s)`, na:naFalta});
+    rec.push({nome:'Pastilha efervescente', g:un*4, un, med:(g,r)=>`${(r.un*v1*perMl).toFixed(1)} pastilha(s)`, na:naFalta});
   } else if(ing.includes('liquido')){
     const ml = naFalta/naLiq;
     rec.push({nome:'Eletrólito líquido', g:ml, med:g=>`${cs(g,1)} ml (${Math.round(g*20)} gotas)`, na:naFalta});
@@ -338,28 +345,31 @@ $('#calc').onclick = () => {
     [`${hh}h${String(mm).padStart(2,'0')}`,'Tempo de pedal'],
     [`${cs(carbTotal)} g`,`Carboidrato · ${cs(cph)} g/h`],
     [`${cs(naTotal)} mg`,`Sódio · ${cs(naph)} mg/h`],
-    [`${cs(liqTotal/1000,1)} L`,`Líquido · ${nGar} garrafa(s)`],
+    [`${cs(liqTotal/1000,1)} L`,'Líquido total'],
     [`${cs(kcal)} kcal`,'Gasto estimado'],
-    [`${cs(mlPorGar)} ml`,'Volume por garrafa'],
-    [`${cs(carbLiquido/liqTotal*100,1)}%`,'Concentração da bebida'],
-    [`${cs(carbSolido)} g`,'Carbo em comida sólida']
+    [`${cs(carryCap)} ml`,`Cabe na bike (${nBottles} garrafa${nBottles>1?'s':''})`],
+    refills>0 ? [`${loads}×`,'Encher a bike · reabastecer'] : [`${cs(carbLiquido/liqTotal*100,1)}%`,'Concentração da bebida'],
+    refills>0 ? [`${cs(carbLiquido/liqTotal*100,1)}%`,'Concentração da bebida'] : [`${cs(carbSolido)} g`,'Carbo em comida sólida']
   ].map(([n,l])=>`<div class="card"><div class="n">${n}</div><div class="l">${l}</div></div>`).join('');
 
   // --- Tabela por garrafa ---
-  $('#tbl').innerHTML = `<tr><th>Ingrediente</th><th>Por garrafa</th><th>Medida caseira</th><th>Total (${nGar}x)</th></tr>` +
+  $('#tbl').innerHTML = `<tr><th>Ingrediente</th><th>Garrafa 1 (${cs(v1)} ml)</th><th>Medida caseira</th><th>Total no pedal</th></tr>` +
     rec.map(r=>{
-      const pg = r.g*fullVol/liqTotal;
+      const pg = r.g*v1*perMl;
       const u = r.nome==='Eletrólito líquido' ? 'ml' : r.nome==='Pastilha efervescente' ? 'un' : 'g';
-      const pgShow = r.nome==='Pastilha efervescente' ? r.un*fullVol/liqTotal : pg;
+      const pgShow = r.nome==='Pastilha efervescente' ? r.un*v1*perMl : pg;
       const totShow = r.nome==='Pastilha efervescente' ? r.un : r.g;
       return `<tr><td>${r.nome}</td><td><b>${cs(pgShow,1)} ${u}</b></td><td>${r.med(pg,r)}</td><td>${cs(totShow,1)} ${u}</td></tr>`;
     }).join('') +
-    `<tr><td>Água</td><td><b>${cs(mlPorGar)} ml</b></td><td>até completar</td><td>${cs(liqTotal)} ml</td></tr>`;
+    `<tr><td>Água</td><td><b>${cs(v1)} ml</b></td><td>até completar</td><td>${cs(liqTotal)} ml</td></tr>`;
 
+  const plano = !cabe
+    ? ` Só cabem ${cs(carryCap)} ml na bike (${nBottles} garrafa${nBottles>1?'s':''}), mas o pedal pede ${cs(liqTotal/1000,1)} L. Encha a bike ${loads}× e reabasteça ${refills}× com água no caminho — leve o pó/eletrólito pré-pesado num saquinho para cada reabastecimento.`
+    : (v2>0
+        ? ` Divida na bike: Garrafa 1 com ${cs(v1)} ml e Garrafa 2 com ${cs(v2)} ml — ${v1===v2?'mesma mistura nas duas':`a Garrafa 2 leva ~${Math.round(v2/v1*100)}% das quantidades da Garrafa 1 (mesma concentração)`}.`
+        : ` Vai tudo em 1 garrafa de ${cs(v1)} ml.`);
   $('#conc').textContent = `Concentração de ${(carbLiquido/liqTotal*100).toFixed(1)}% — abaixo de 8%, o esvaziamento gástrico continua rápido e o risco de enjoo é baixo.` +
-    (carbSolido>3 ? ` Os ${cs(carbSolido)} g restantes vão em comida sólida (banana ≈ 25 g, barra ≈ 30 g, gel ≈ 25 g), porque concentrar tudo na garrafa causaria desconforto.` : '') +
-    (parcial ? ` A coluna "por garrafa" é para uma garrafa cheia de ${cs(gar)} ml: encha ${nGar-1} assim e faça a última com ${cs(lastVol)} ml (mesma mistura, só um pouco menos de tudo).`
-             : (nGar>1 ? ` As ${nGar} garrafas vão cheias com ${cs(gar)} ml cada.` : ''));
+    (carbSolido>3 ? ` Os ${cs(carbSolido)} g restantes vão em comida sólida (banana ≈ 25 g, barra ≈ 30 g, gel ≈ 25 g), porque concentrar tudo na garrafa causaria desconforto.` : '') + plano;
 
   // --- Garrafa (assinatura) ---
   const totalG = rec.reduce((s,r)=>s+r.g,0) || 1;
@@ -403,16 +413,19 @@ $('#calc').onclick = () => {
     prep.push(`Complete com água gelada até ${cs(mlPorGar)} ml, adicione a pastilha efervescente por último e espere borbulhar por completo antes de fechar — não agite com força para não transbordar.`);
   else
     prep.push(`Complete com água gelada até ${cs(mlPorGar)} ml e agite 20 segundos com a tampa fechada.`);
-  prep.push(nGar>1
-    ? `Repita para as ${nGar} garrafas. As que não vão no quadro, leve os ingredientes pré-medidos num saquinho/frasco e misture com água no meio do caminho.`
-    : 'Leve a garrafa cheia e, no calor, leve outra só com água para beber puro e molhar a nuca.');
+  prep.push(refills>0
+    ? `Você vai encher a bike ${loads}× (reabastece ${refills}× no caminho). Leve o pó/eletrólito pré-pesado em saquinhos e misture com água nos pontos de apoio.`
+    : (v2>0
+        ? `Prepare as duas garrafas com a mesma mistura${v1===v2?'':' (a Garrafa 2 na proporção do volume dela)'} e encaixe na bike.`
+        : 'Leve a garrafa cheia e, no calor, leve outra só com água para beber puro e molhar a nuca.'));
   prep.push('Prove em casa antes da prova. Bebida nova em dia de prova é receita de dor de barriga.');
   $('#prep').innerHTML = prep.map(t=>`<li>${t}</li>`).join('');
 
   // --- Recomendações ---
   const tips = [];
   tips.push(`Beba a cada 15–20 min, ~${mlGole} ml por vez. Sede já é atraso.`);
-  tips.push('Leve uma segunda garrafa só com água: para lavar a boca, molhar a nuca e diluir a mistura se enjoar.');
+  if(refills>0) tips.push(`<span class="warn"></span>Só cabem ${cs(carryCap)} ml na bike, e o pedal pede ${cs(liqTotal/1000,1)} L. Planeje ${refills} ponto(s) de reabastecimento com água e leve o pó pré-pesado — sem isso o risco é desidratação.`);
+  if(nBottles===1) tips.push('Se puder, leve uma segunda garrafa só com água: para lavar a boca, molhar a nuca e diluir a mistura se enjoar.');
   if(cph>=90) tips.push('Acima de 90 g/h você depende de glicose + frutose juntas (2:1). Só funciona se o intestino estiver treinado — suba 10 g/h por semana.');
   if(temp>=30) tips.push('<span></span>Acima de 30 °C o sódio e o volume mandam mais que o carboidrato. Se tiver que escolher, priorize beber.');
   if(h>=3) tips.push('Pedais longos: alterne sabor. Depois de 3 h, doce cansa — inclua algo salgado (pão com queijo, batata cozida com sal).');
