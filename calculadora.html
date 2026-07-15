@@ -49,8 +49,11 @@
   .chip input{width:auto;accent-color:var(--amber)}
   .chip.on{border-color:var(--amber);background:#1a3b2f22;box-shadow:inset 0 0 0 1px var(--amber)}
   .chip img{height:20px;width:auto;border-radius:4px;vertical-align:middle}
-  .chip.brand{border-color:var(--amber);font-weight:700}
+  .chip.brand{border-color:var(--amber);font-weight:700;color:#ffe9c2;animation:brandPulse 2.2s ease-in-out infinite}
   .chip.brand.on{background:#3a2a0e55}
+  .chip .badge{font-size:9px;background:var(--amber);color:#20160a;padding:2px 7px;border-radius:999px;letter-spacing:.04em;text-transform:uppercase;font-weight:700}
+  @keyframes brandPulse{0%,100%{box-shadow:0 0 0 0 rgba(245,165,36,0)}50%{box-shadow:0 0 0 4px rgba(245,165,36,.30)}}
+  @media (prefers-reduced-motion:reduce){.chip.brand{animation:none}}
   button.go{margin-top:22px;width:100%;padding:16px;border:0;border-radius:12px;background:var(--amber);color:#20160a;font:700 18px 'Barlow Condensed',sans-serif;letter-spacing:.12em;text-transform:uppercase;cursor:pointer}
   button.go:hover{filter:brightness(1.08)}
   .ghost{background:transparent;color:var(--paper);border:1px solid var(--line);border-radius:10px;padding:10px 16px;font:600 13px Archivo;cursor:pointer}
@@ -159,7 +162,7 @@
   <label class="chip"><input type="checkbox" value="liquido"> Eletrólito líquido (gotas)</label>
   <label class="chip"><input type="checkbox" value="sal"> Sal de cozinha</label>
   <label class="chip"><input type="checkbox" value="frutose"> Frutose / açúcar</label>
-  <label class="chip brand" title="Receita pronta: mel + limão + sal (~8% de carbo)"><input type="checkbox" value="kisuco"> <img src="marca.png" alt="" onerror="this.style.display='none'"> KI-SUCO DO BARBA</label>
+  <label class="chip brand" title="Receita pronta: mel + limão + sal (~8% de carbo)"><input type="checkbox" value="kisuco"> <img src="marca.png" alt="" onerror="this.style.display='none'"> KI-SUCO DO BARBA <span class="badge">★ receita da casa</span></label>
 </div>
 
 <div class="grid" style="margin-top:14px">
@@ -169,8 +172,10 @@
   <div class="note" style="align-self:end">Confira o rótulo do seu produto e ajuste. Marcas variam de 250 a 1000 mg de sódio por dose.</div>
 </div>
 
-<label style="margin-top:18px">Suplementação sólida / géis <span class="note" style="text-transform:none;letter-spacing:0">— para provas longas, quando sobra carboidrato que não cabe na bebida</span></label>
-<div class="grid" style="margin-top:6px">
+<div id="supBox" style="display:none">
+<label style="margin-top:18px">Suplementação sólida / géis <span class="note" style="text-transform:none;letter-spacing:0">— as garrafas atingiram o limite de 8%; falta carboidrato para suprir</span></label>
+<p class="note" id="supIntro" style="margin:6px 0 0;border-left:2px solid var(--alert);padding-left:10px"></p>
+<div class="grid" style="margin-top:8px">
   <div><label>Como vai suplementar</label>
     <select id="supTipo">
       <option value="definir" selected>A definir</option>
@@ -182,6 +187,8 @@
   <div><label>Alimentos/géis que vai levar</label><input id="supItens" type="text" placeholder="ex: banana, barra de cereal, gel X"></div>
   <div><label>Carboidrato por gel (g)</label><input id="gelCarb" type="number" value="25" min="1"></div>
   <div><label>Sódio por gel (mg)</label><input id="gelNa" type="number" value="50" min="0"></div>
+</div>
+<p class="note" style="margin-top:6px">Ajuste os valores do seu gel e clique de novo em <b>Calcular receita</b> para o plano exato.</p>
 </div>
 
 <button class="go noprint" id="calc">Calcular receita</button>
@@ -329,6 +336,7 @@ $('#calc').onclick = () => {
   const carbMaxLiquido = liqTotal*0.08;
   const carbLiquido = Math.min(carbTotal, carbMaxLiquido);
   const carbSolido = Math.max(0, carbTotal-carbLiquido);
+  const precisaSup = carbSolido > 30;   // só planeja sólido/gel quando o déficit é relevante
 
   // --- Distribuição entre ingredientes (glicose ~2 : frutose ~1) ---
   const temGli = ing.includes('malto'), temFru = ing.includes('mel')||ing.includes('melado')||ing.includes('frutose');
@@ -400,7 +408,7 @@ $('#calc').onclick = () => {
         : ` Vai tudo em ${conts[0]||('1 garrafa de '+cs(v1)+' ml')}.`);
   // suplementação sólida / géis (obrigatória quando sobra carbo para sólido)
   let solidoTxt = '';
-  if(carbSolido>3){
+  if(precisaSup){
     const gels = Math.max(1, Math.ceil(carbSolido/gelCarb));
     const naGel = Math.round(gels*gelNa);
     const base = ` Faltam ${cs(carbSolido)} g de carboidrato que não cabem na bebida`;
@@ -413,6 +421,10 @@ $('#calc').onclick = () => {
     }
   }
   $('#conc').textContent = `Concentração de ${(carbLiquido/liqTotal*100).toFixed(1)}% — abaixo de 8%, o esvaziamento gástrico continua rápido e o risco de enjoo é baixo.` + solidoTxt + plano;
+
+  // Suplementação só aparece quando a bebida (a 8%) não comporta todo o carbo
+  $('#supBox').style.display = precisaSup ? '' : 'none';
+  if(precisaSup) $('#supIntro').textContent = `A bebida comporta no máximo ${cs(carbLiquido)} g de carboidrato (limite seguro de 8%), mas o pedal pede ${cs(carbTotal)} g. Faltam ${cs(carbSolido)} g para suprir com géis e/ou alimentos sólidos — informe como vai fazer e recalcule.`;
 
   // --- Garrafa (assinatura) ---
   const totalG = rec.reduce((s,r)=>s+r.g,0) || 1;
@@ -432,7 +444,7 @@ $('#calc').onclick = () => {
   const mlGole = Math.round(liqTotal/nBlocos);
   for(let i=1;i<=nBlocos;i++){
     const min = i*20;
-    passos.push({t:`${Math.floor(min/60)}h${String(min%60).padStart(2,'0')}`, d:`${mlGole} ml da mistura${(i%3===0 && carbSolido>3)?' + gel/sólido':''}`});
+    passos.push({t:`${Math.floor(min/60)}h${String(min%60).padStart(2,'0')}`, d:`${mlGole} ml da mistura${(i%3===0 && precisaSup)?' + gel/sólido':''}`});
   }
   passos.push({t:'Pós', d:`${cs(peso*1.2)} g de carbo + ${cs(peso*0.3,1)} g de proteína e 1,5 L de líquido por kg perdido.`});
   $('#tl').innerHTML = passos.map(p=>`<div class="tick"><div class="t">${p.t}</div><div class="d">${p.d}</div></div>`).join('');
@@ -480,8 +492,8 @@ $('#calc').onclick = () => {
   const tips = [];
   tips.push(`Beba a cada 15–20 min, ~${mlGole} ml por vez. Sede já é atraso.`);
   if(refills>0) tips.push(`<span class="warn"></span>Só cabem ${cs(carryCap)} ml na bike, e o pedal pede ${cs(liqTotal/1000,1)} L. Planeje ${refills} ponto(s) de reabastecimento com água e leve o pó pré-pesado — sem isso o risco é desidratação.`);
-  if(carbSolido>=15 && supTipo==='definir') tips.push(`<span class="warn"></span>Prova longa: são ${cs(carbSolido)} g de carboidrato que não cabem na bebida. Informe no campo "Suplementação" quais géis/alimentos vai usar (e a composição dos géis) — obrigatório para a estratégia fechar.`);
-  if(carbSolido>3 && (supTipo==='gel'||supTipo==='ambos') && gelNa>0){ const gels=Math.max(1,Math.ceil(carbSolido/gelCarb)); tips.push(`Os ~${gels} gel(is) somam ${cs(gels*gelNa)} mg de sódio — isso entra na sua conta de eletrólitos junto com a bebida.`); }
+  if(precisaSup && supTipo==='definir') tips.push(`<span class="warn"></span>Prova longa: são ${cs(carbSolido)} g de carboidrato que não cabem na bebida. Informe no campo "Suplementação" quais géis/alimentos vai usar (e a composição dos géis) — obrigatório para a estratégia fechar.`);
+  if(precisaSup && (supTipo==='gel'||supTipo==='ambos') && gelNa>0){ const gels=Math.max(1,Math.ceil(carbSolido/gelCarb)); tips.push(`Os ~${gels} gel(is) somam ${cs(gels*gelNa)} mg de sódio — isso entra na sua conta de eletrólitos junto com a bebida.`); }
   if(nBottles===1) tips.push('Se puder, leve uma segunda garrafa só com água: para lavar a boca, molhar a nuca e diluir a mistura se enjoar.');
   if(cph>=90) tips.push('Acima de 90 g/h você depende de glicose + frutose juntas (2:1). Só funciona se o intestino estiver treinado — suba 10 g/h por semana.');
   if(temp>=30) tips.push('<span></span>Acima de 30 °C o sódio e o volume mandam mais que o carboidrato. Se tiver que escolher, priorize beber.');
