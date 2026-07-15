@@ -63,6 +63,7 @@
   .card .l{font-family:'IBM Plex Mono',monospace;font-size:10px;letter-spacing:.12em;text-transform:uppercase;color:var(--mute);margin-top:6px}
   /* assinatura: a garrafa */
   .bottleRow{display:grid;grid-template-columns:210px 1fr;gap:22px;align-items:center;background:var(--ink-2);border:1px solid var(--line);border-radius:var(--r);padding:18px}
+  .bottleRow>div{min-width:0}
   .bottle{position:relative;height:270px;border:3px solid var(--paper);border-radius:22px 22px 30px 30px;overflow:hidden;background:#0a1c20}
   .bottle:before{content:"";position:absolute;top:-14px;left:50%;transform:translateX(-50%);width:54px;height:14px;background:var(--paper);border-radius:4px 4px 0 0}
   .layer{position:absolute;left:0;right:0;display:flex;align-items:center;justify-content:center;font:600 12px 'IBM Plex Mono',monospace;color:#0b2226;transition:height .6s ease}
@@ -165,11 +166,11 @@
   <label class="chip brand" title="Receita pronta: mel + limão + sal (~8% de carbo)"><input type="checkbox" value="kisuco"> <img src="marca.png" alt="" onerror="this.style.display='none'"> KI-SUCO DO BARBA <span class="badge">★ receita da casa</span></label>
 </div>
 
-<div class="grid" style="margin-top:14px">
-  <div><label>Sódio do eletrólito em pó (mg por 30 g)</label><input id="naPo" type="number" value="500"></div>
-  <div><label>Sódio por pastilha (mg)</label><input id="naPast" type="number" value="300"></div>
-  <div><label>Sódio do líquido (mg por ml)</label><input id="naLiq" type="number" value="20"></div>
-  <div class="note" style="align-self:end">Confira o rótulo do seu produto e ajuste. Marcas variam de 250 a 1000 mg de sódio por dose.</div>
+<div class="grid" id="naBox" style="margin-top:14px;display:none">
+  <div id="naPoBox"><label>Sódio do eletrólito em pó (mg por 30 g) *</label><input id="naPo" type="number" value="500"></div>
+  <div id="naPastBox"><label>Sódio por pastilha (mg) *</label><input id="naPast" type="number" value="300"></div>
+  <div id="naLiqBox"><label>Sódio do líquido (mg por ml) *</label><input id="naLiq" type="number" value="20"></div>
+  <div class="note" style="align-self:end">* Você selecionou uma fonte industrial: confira o rótulo e informe o sódio. Marcas variam de 250 a 1000 mg por dose.</div>
 </div>
 
 <div id="supBox" style="display:none">
@@ -201,7 +202,7 @@
   <div class="bottleRow">
     <div class="bottle" id="bottle"><div class="ml" id="mlLabel"></div></div>
     <div>
-      <table id="tbl"></table>
+      <div style="overflow-x:auto"><table id="tbl"></table></div>
       <p class="note" id="conc"></p>
     </div>
   </div>
@@ -258,7 +259,17 @@
 
 <script>
 const $ = s => document.querySelector(s);
-document.querySelectorAll('.chip input').forEach(i=>i.onchange=()=>i.parentElement.classList.toggle('on',i.checked));
+// campos de sódio só aparecem para as fontes industriais selecionadas
+function syncSodio(){
+  const on = v => !!document.querySelector('.chip input[value="'+v+'"]:checked');
+  const po=on('eletro'), pa=on('pastilha'), li=on('liquido');
+  $('#naPoBox').style.display   = po?'':'none';
+  $('#naPastBox').style.display = pa?'':'none';
+  $('#naLiqBox').style.display  = li?'':'none';
+  $('#naBox').style.display     = (po||pa||li)?'':'none';
+}
+document.querySelectorAll('.chip input').forEach(i=>i.onchange=()=>{i.parentElement.classList.toggle('on',i.checked);syncSodio();});
+syncSodio();
 
 // alterna entre informar por velocidade média ou por tempo de pedal
 const durSel=document.querySelector('#durMode');
@@ -386,16 +397,22 @@ $('#calc').onclick = () => {
     refills>0 ? [`${cs(carbLiquido/liqTotal*100,1)}%`,'Concentração da bebida'] : [`${cs(carbSolido)} g`,'Carbo em comida sólida']
   ].map(([n,l])=>`<div class="card"><div class="n">${n}</div><div class="l">${l}</div></div>`).join('');
 
-  // --- Tabela por garrafa ---
-  $('#tbl').innerHTML = `<tr><th>Ingrediente</th><th>Garrafa 1 (${cs(v1)} ml)</th><th>Medida caseira</th><th>Total no pedal</th></tr>` +
-    rec.map(r=>{
-      const pg = r.g*v1*perMl;
-      const u = r.nome==='Eletrólito líquido' ? 'ml' : r.nome==='Pastilha efervescente' ? 'un' : 'g';
-      const pgShow = r.nome==='Pastilha efervescente' ? r.un*v1*perMl : pg;
-      const totShow = r.nome==='Pastilha efervescente' ? r.un : r.g;
-      return `<tr><td>${r.nome}</td><td><b>${cs(pgShow,1)} ${u}</b></td><td>${r.med(pg,r)}</td><td>${cs(totShow,1)} ${u}</td></tr>`;
-    }).join('') +
-    `<tr><td>Água</td><td><b>${cs(v1)} ml</b></td><td>até completar</td><td>${cs(liqTotal)} ml</td></tr>`;
+  // --- Tabela: composição de cada recipiente + total do pedal ---
+  const recip = [];
+  if(v1>0) recip.push({lab:'Garrafa 1', vol:v1});
+  if(v2>0) recip.push({lab:'Garrafa 2', vol:v2});
+  if(vMoch>0) recip.push({lab:'Mochila', vol:vMoch});
+  const th = `<tr><th>Ingrediente</th>` +
+    recip.map(c=>`<th>${c.lab}<br><span style="font-weight:400;opacity:.65">${cs(c.vol)} ml</span></th>`).join('') +
+    `<th>Medida (G1)</th><th>Total${refills>0?` (${loads}×)`:''}</th></tr>`;
+  const body = rec.map(r=>{
+    const u = r.nome==='Eletrólito líquido' ? 'ml' : r.nome==='Pastilha efervescente' ? 'un' : 'g';
+    const base = r.nome==='Pastilha efervescente' ? r.un : r.g;       // base do total no pedal
+    const cells = recip.map(c=>`<td><b>${cs(base*c.vol*perMl,1)} ${u}</b></td>`).join('');
+    return `<tr><td>${r.nome}</td>${cells}<td>${r.med(r.g*v1*perMl,r)}</td><td>${cs(base,1)} ${u}</td></tr>`;
+  }).join('');
+  const agua = `<tr><td>Água</td>${recip.map(c=>`<td><b>${cs(c.vol)} ml</b></td>`).join('')}<td>até completar</td><td>${cs(liqTotal)} ml</td></tr>`;
+  $('#tbl').innerHTML = th + body + agua;
 
   const conts = [];
   if(v1>0) conts.push(`Garrafa 1 com ${cs(v1)} ml`);
